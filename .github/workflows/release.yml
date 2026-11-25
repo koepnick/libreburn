@@ -36,7 +36,7 @@ jobs:
           working-directory: python/libreburn
           args: --release --out dist
           manylinux: auto
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: wheels-${{ matrix.target }}
           path: python/libreburn/dist/*.whl
@@ -57,7 +57,7 @@ jobs:
         with:
           enable-cache: false   # no caches in release builds
       - run: uv build --package libreburn-desktop --out-dir dist
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-sdists
           path: dist/*
@@ -82,7 +82,7 @@ jobs:
           name: wheels-${{ matrix.arch }}
           path: dist
       - run: packaging/appimage/build.sh ${{ matrix.arch }}
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: appimage-${{ matrix.arch }}
           path: "*.AppImage"
