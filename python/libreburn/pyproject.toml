@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 [build-system]
-requires = ["maturin>=1.8,<2"]
+requires = ["maturin>=1.16.0,<2"]
 build-backend = "maturin"
 
 [project]
