@@ -21,9 +21,13 @@ updates:
     directory: /
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+    # All action bumps, majors included, land as one PR so they never
+    # conflict with each other.
     groups:
-      actions-minor: { update-types: [minor, patch] }
+      actions: { patterns: ["*"] }
   - package-ecosystem: docker
     directory: /packaging/container
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
+    groups:
+      base-images: { patterns: ["*"] }
