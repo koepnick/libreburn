@@ -3,12 +3,12 @@
 
 /// Scramble key used by RDC644x boards.
 pub const MAGIC_644X: u8 = 0x88;
-/// Single-byte ACK reply. Placeholder: confirm against recorded fixtures.
-pub const ACK: u8 = 0xC6;
-/// Keep-alive payload. Placeholder: confirm against recorded fixtures.
-pub const CMD_PING: [u8; 2] = [0xCC, 0x00];
-/// Stop payload. Placeholder: confirm against recorded fixtures.
-pub const CMD_STOP: [u8; 2] = [0xD7, 0x00];
+/// UDP port the controller listens on for commands.
+pub const UDP_COMMAND_PORT: u16 = 50200;
+/// UDP port replies are sent to.
+pub const UDP_REPLY_PORT: u16 = 40200;
+/// Largest payload sent in one UDP packet. Jobs are split at command boundaries.
+pub const MAX_PACKET_PAYLOAD: usize = 1000;
 
 /// Scramble one byte with the board's magic key.
 pub const fn scramble(b: u8, magic: u8) -> u8 {
@@ -45,6 +45,16 @@ pub fn encode_packet(payload: &[u8], magic: u8) -> Vec<u8> {
     packet
 }
 
+/// Scramble a whole buffer.
+pub fn scramble_all(data: &[u8], magic: u8) -> Vec<u8> {
+    data.iter().map(|&b| scramble(b, magic)).collect()
+}
+
+/// Unscramble a whole buffer.
+pub fn unscramble_all(data: &[u8], magic: u8) -> Vec<u8> {
+    data.iter().map(|&b| unscramble(b, magic)).collect()
+}
+
 /// Check the checksum and unscramble a packet. Returns `None` if the checksum is wrong.
 pub fn decode_packet(packet: &[u8], magic: u8) -> Option<Vec<u8>> {
     let (sum, body) = packet.split_first_chunk::<2>()?;
@@ -74,6 +84,22 @@ mod tests {
             seen[scramble(b, MAGIC_644X) as usize] = true;
         }
         assert!(seen.iter().all(|&s| s));
+    }
+
+    #[test]
+    fn ack_on_the_wire_matches_known_byte() {
+        // RDC644x boards answer with 0xC6, which is the ACK payload 0xCC scrambled.
+        assert_eq!(scramble(crate::codec::ACK, MAGIC_644X), 0xC6);
+        assert_eq!(scramble(crate::codec::NAK, MAGIC_644X), 0x48);
+    }
+
+    #[test]
+    fn known_packet_bytes() {
+        // ENQ (0xCE) with key 0x88: scrambled 0xC8, checksum 0x00C8.
+        assert_eq!(
+            encode_packet(&[crate::codec::ENQ], MAGIC_644X),
+            [0x00, 0xC8, 0xC8]
+        );
     }
 
     #[test]

@@ -373,6 +373,7 @@ name = "libreburn-driver-ruida"
 version = "0.1.0"
 dependencies = [
  "libreburn-core",
+ "toml",
 ]
 
 [[package]]
