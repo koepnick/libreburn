@@ -25,6 +25,14 @@ pub enum ErrorCode {
     ImportUnsupported,
     /// The project could not be turned into a job.
     PlanFailed,
+    /// An API request was malformed.
+    ApiInvalid,
+    /// An API request named something that does not exist.
+    ApiNotFound,
+    /// An API request needs something that is not ready yet.
+    ApiConflict,
+    /// An API request lacked a valid token.
+    ApiUnauthorized,
 }
 
 impl ErrorCode {
@@ -39,6 +47,10 @@ impl ErrorCode {
             Self::ImportFailed => "LB-IMPORT-001",
             Self::ImportUnsupported => "LB-IMPORT-002",
             Self::PlanFailed => "LB-PLAN-001",
+            Self::ApiInvalid => "LB-API-001",
+            Self::ApiNotFound => "LB-API-002",
+            Self::ApiConflict => "LB-API-003",
+            Self::ApiUnauthorized => "LB-API-004",
         }
     }
 }

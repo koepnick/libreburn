@@ -2,6 +2,7 @@
 //! `libreburnd`: the libreburn service.
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::Parser;
@@ -16,6 +17,9 @@ struct Args {
     /// Allow listening on a non-loopback address.
     #[arg(long, env = "LIBREBURN_ALLOW_REMOTE")]
     allow_remote: bool,
+    /// Machine profile to load at startup (TOML).
+    #[arg(long, env = "LIBREBURN_PROFILE")]
+    profile: Option<PathBuf>,
     /// Write logs as JSON lines (NF-3).
     #[arg(long)]
     json_logs: bool,
@@ -43,6 +47,27 @@ async fn main() -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    let profile = match &args.profile {
+        None => None,
+        Some(path) => match std::fs::read_to_string(path)
+            .map_err(|e| e.to_string())
+            .and_then(|t| libreburn_core::MachineProfile::from_toml(&t).map_err(|e| e.to_string()))
+        {
+            Ok(p) => {
+                tracing::info!(profile = %p.machine.name, "loaded machine profile");
+                Some(p)
+            }
+            Err(e) => {
+                tracing::error!(
+                    "[LB-SERVICE-004] Could not load profile {}: {e}",
+                    path.display()
+                );
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+    let state = libreburn_service::AppState::new(token, profile);
+
     let listener = match tokio::net::TcpListener::bind(args.listen).await {
         Ok(l) => l,
         Err(e) => {
@@ -57,7 +82,7 @@ async fn main() -> ExitCode {
     let shutdown = async {
         let _ = tokio::signal::ctrl_c().await;
     };
-    if let Err(e) = axum::serve(listener, libreburn_service::router())
+    if let Err(e) = axum::serve(listener, libreburn_service::router(state))
         .with_graceful_shutdown(shutdown)
         .await
     {

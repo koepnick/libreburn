@@ -3,11 +3,20 @@
 //!
 //! The service is the only process that talks to a controller (AR-1). It
 //! listens on localhost unless remote access is enabled with a token (AR-4).
+//! Endpoints are listed in `docs/api.md`.
+
+pub mod api;
 
 use std::net::SocketAddr;
 
+use axum::extract::{DefaultBodyLimit, Request, State};
+use axum::http::{StatusCode, header};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::{Json, Router, routing::get};
 use serde::Serialize;
+
+pub use api::AppState;
 
 /// Version and build information returned by `GET /api/v1/version`.
 #[derive(Debug, Serialize)]
@@ -20,10 +29,9 @@ pub struct VersionInfo {
     pub arch: &'static str,
 }
 
-/// Build the API router.
-pub fn router() -> Router {
-    Router::new()
-        .route("/api/v1/health", get(|| async { "ok" }))
+/// Build the API router around `state`.
+pub fn router(state: AppState) -> Router {
+    let protected = Router::new()
         .route(
             "/api/v1/version",
             get(|| async {
@@ -34,6 +42,46 @@ pub fn router() -> Router {
                 })
             }),
         )
+        .merge(api::routes())
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_token))
+        .with_state(state);
+    Router::new()
+        .route("/api/v1/health", get(|| async { "ok" }))
+        .merge(protected)
+        .layer(DefaultBodyLimit::max(api::MAX_UPLOAD_BYTES))
+}
+
+/// Compare without leaking the length of the matching prefix through timing.
+fn same(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+}
+
+async fn require_token(State(state): State<AppState>, req: Request, next: Next) -> Response {
+    let Some(token) = state.token() else {
+        return next.run(req).await;
+    };
+    let bearer = req
+        .headers()
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "));
+    // Browsers cannot set headers on WebSocket upgrades, so allow ?token= too.
+    let query = req
+        .uri()
+        .query()
+        .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("token=")));
+    if bearer
+        .or(query)
+        .is_some_and(|t| same(t.as_bytes(), token.as_bytes()))
+    {
+        return next.run(req).await;
+    }
+    api::error_response(
+        StatusCode::UNAUTHORIZED,
+        "Request was not authorized",
+        "remote access is on and the request did not carry the service token",
+        "send `Authorization: Bearer <LIBREBURN_TOKEN>`",
+    )
 }
 
 /// Check the listen address against the remote-access setting (AR-4).
@@ -57,35 +105,4 @@ pub fn check_bind(addr: SocketAddr, allow_remote: bool, token: Option<&str>) -> 
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use axum::body::Body;
-    use axum::http::{Request, StatusCode};
-    use http_body_util::BodyExt;
-    use tower::ServiceExt;
-
-    #[tokio::test]
-    async fn health_returns_ok() {
-        let res = router()
-            .oneshot(Request::get("/api/v1/health").body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(res.status(), StatusCode::OK);
-        let body = res.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(&body[..], b"ok");
-    }
-
-    #[test]
-    fn localhost_is_always_allowed() {
-        assert!(check_bind("127.0.0.1:7878".parse().unwrap(), false, None).is_ok());
-    }
-
-    #[test]
-    fn remote_needs_opt_in_and_token() {
-        let addr = "0.0.0.0:7878".parse().unwrap();
-        assert!(check_bind(addr, false, Some("0123456789abcdef")).is_err());
-        assert!(check_bind(addr, true, None).is_err());
-        assert!(check_bind(addr, true, Some("short")).is_err());
-        assert!(check_bind(addr, true, Some("0123456789abcdef")).is_ok());
-    }
-}
+mod tests;
