@@ -182,6 +182,10 @@ impl LmcSim {
                 let c: protocol::Command = packet.try_into().expect("12 bytes");
                 self.singles.push(c);
                 let (op, a) = protocol::decode(&c);
+                // Correction lines are sent without reading a reply.
+                if op == single::WRITE_COR_LINE {
+                    return None;
+                }
                 let mut reply = [0u16; 4];
                 match op {
                     single::ENABLE_LASER => self.laser_enabled = true,
@@ -213,7 +217,6 @@ impl LmcSim {
                     single::GET_VERSION
                     | single::GET_LIST_STATUS
                     | single::LASER_SIGNAL_OFF
-                    | single::WRITE_COR_LINE
                     | single::WRITE_COR_TABLE
                     | single::SET_CONTROL_MODE
                     | single::SET_DELAY_MODE
