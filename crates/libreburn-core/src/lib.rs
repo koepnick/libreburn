@@ -13,6 +13,6 @@ pub mod safety;
 
 pub use driver::{Driver, DriverStatus, FrameRequest, MachineState, RawExchange};
 pub use error::{Error, ErrorCode, Result};
-pub use job::{Job, Layer, LayerMode, Move, MoveKind};
+pub use job::{Job, Layer, LayerMode, Move, MoveKind, effective_power_pct};
 pub use profile::{LaserType, MachineProfile};
 pub use safety::{FramingSource, SafetyPolicy};
