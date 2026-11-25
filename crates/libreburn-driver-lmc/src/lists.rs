@@ -48,6 +48,8 @@ pub struct Settings {
     pub polygon_delay_us: u16,
     /// Wait after opening the master oscillator, ms.
     pub open_mo_delay_ms: f64,
+    /// EZCAD `.cor` lens correction file, if any.
+    pub correction_file: Option<String>,
 }
 
 fn invalid(why: String, hint: &str) -> Error {
@@ -101,6 +103,11 @@ impl Settings {
             laser_delay_us: num("laser_delay_us", 100.0)?.min(65535.0) as u16,
             polygon_delay_us: num("polygon_delay_us", 100.0)?.min(655_350.0) as u16,
             open_mo_delay_ms: num("open_mo_delay_ms", 8.0)?,
+            correction_file: c
+                .get("correction_file")
+                .and_then(|v| v.as_str())
+                .filter(|p| !p.is_empty())
+                .map(str::to_owned),
         };
         if s.width_mm <= 0.0 || s.height_mm <= 0.0 {
             return Err(invalid(

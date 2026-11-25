@@ -18,9 +18,13 @@
 //!   laser-enable bit.
 //! - `stop()` aborts the list, closes the MO and clears every output.
 
+pub mod cor;
 pub mod lists;
 pub mod protocol;
 pub mod sim;
+pub mod usb;
+
+pub use usb::UsbTransport;
 
 use libreburn_core::{
     Driver, DriverStatus, Error, ErrorCode, FrameRequest, FramingSource, Job, MachineProfile,
@@ -95,6 +99,37 @@ impl<T: Transport> LmcDriver<T> {
         });
     }
 
+    /// Send a single command whose reply is not read (correction lines).
+    fn single_no_reply(&mut self, op: u16, args: [u16; 5]) -> Result<()> {
+        let cmd = command(op, args);
+        self.transport.write(&cmd)?;
+        self.record(cmd.to_vec(), Vec::new(), protocol::describe(&cmd));
+        Ok(())
+    }
+
+    /// Send the lens correction table, or a blank one.
+    fn write_correction(&mut self) -> Result<()> {
+        let Some(path) = self.settings.correction_file.clone() else {
+            self.single(single::WRITE_COR_TABLE, [0; 5])?;
+            return Ok(());
+        };
+        let bytes = std::fs::read(&path).map_err(|e| {
+            Error::new(
+                ErrorCode::ProfileInvalid,
+                "Could not read the lens correction file",
+                format!("{path}: {e}"),
+                "check connection.correction_file, or leave it empty for no correction",
+            )
+        })?;
+        let table = cor::parse(&bytes)?;
+        self.single(single::WRITE_COR_TABLE, [1, 0, 0, 0, 0])?;
+        // MeerK40t sends the lines without reading replies.
+        for (i, (dx, dy)) in table.into_iter().enumerate() {
+            self.single_no_reply(single::WRITE_COR_LINE, [dx, dy, u16::from(i > 0), 0, 0])?;
+        }
+        Ok(())
+    }
+
     fn single(&mut self, op: u16, args: [u16; 5]) -> Result<[u16; 4]> {
         let cmd = command(op, args);
         self.transport.write(&cmd)?;
@@ -167,8 +202,7 @@ impl<T: Transport> LmcDriver<T> {
         self.single(single::GET_SERIAL_NO, [0; 5])?;
         self.single(single::GET_VERSION, [0; 5])?;
         self.single(single::RESET, [0; 5])?;
-        // Blank correction table until .cor loading lands.
-        self.single(single::WRITE_COR_TABLE, [0; 5])?;
+        self.write_correction()?;
         self.safe_outputs()?;
         self.single(single::ENABLE_LASER, [0; 5])?;
         self.single(single::SET_CONTROL_MODE, [0; 5])?;
@@ -561,6 +595,39 @@ mod tests {
         let serial = d.read_param("serial").unwrap();
         assert_eq!(serial.len(), 8);
         assert!(d.write_param("power", &[1]).is_err());
+    }
+
+    #[test]
+    fn correction_file_is_uploaded_on_connect() {
+        let dir = std::env::temp_dir().join(format!("libreburn-cor-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("lens.cor");
+        std::fs::write(&path, cor::tests::int_file()).unwrap();
+        let text = PROFILE.replace(
+            "correction_file = \"\"",
+            &format!("correction_file = {:?}", path.to_str().unwrap()),
+        );
+        let d = driver_from(&text);
+        let s = sim(&d);
+        assert!(s.errors.is_empty(), "{:?}", s.errors);
+        let lines: Vec<_> = s
+            .singles
+            .iter()
+            .map(|c| decode(c))
+            .filter(|(op, _)| *op == single::WRITE_COR_LINE)
+            .collect();
+        assert_eq!(lines.len(), cor::ENTRIES);
+        assert_eq!(lines[0].1[2], 0);
+        assert_eq!(lines[5].1, [5, 0x8005, 1, 0, 0]);
+        std::fs::remove_dir_all(dir).unwrap();
+
+        let bad = PROFILE.replace(
+            "correction_file = \"\"",
+            "correction_file = \"/nonexistent.cor\"",
+        );
+        let p = MachineProfile::from_toml(&bad).unwrap();
+        let mut d = LmcDriver::new(p, SimTransport::new(LmcSim::new(0, 8))).unwrap();
+        assert_eq!(d.connect().unwrap_err().code, ErrorCode::ProfileInvalid);
     }
 
     #[test]

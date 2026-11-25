@@ -55,7 +55,8 @@ is exactly the setting that makes "framing" fire the fiber source.
 | --- | --- |
 | Init values (laser mode, timing, standby, FPK) | MeerK40t defaults, unconfirmed |
 | Guide-light bit 8 / enable bit 0 | MeerK40t defaults, check per machine |
-| `.cor` correction files | not loaded yet; a blank table is sent |
+| `.cor` correction files (both layouts) | loaded from `connection.correction_file`, from MeerK40t |
+| USB: 9588:9899, interface 0, bulk OUT 0x02, IN 0x88 | from MeerK40t |
 
 `sim::LmcSim` tracks port bits, MO state and list execution, and records
 every mark attempt, every firing segment with its power, and every jump
