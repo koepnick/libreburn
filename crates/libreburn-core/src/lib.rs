@@ -7,9 +7,11 @@
 
 pub mod driver;
 pub mod error;
+pub mod estimate;
 pub mod geometry;
 pub mod import;
 pub mod job;
+pub mod planner;
 pub mod profile;
 pub mod project;
 pub mod raster;
@@ -17,8 +19,10 @@ pub mod safety;
 
 pub use driver::{Driver, DriverStatus, FrameRequest, MachineState, RawExchange};
 pub use error::{Error, ErrorCode, Result};
+pub use estimate::{Estimate, EstimateOptions, LayerEstimate};
 pub use import::{FileFormat, ImportOptions};
 pub use job::{Job, Layer, LayerMode, Move, MoveKind, effective_power_pct};
+pub use planner::{FrameShape, Plan, PlanOptions, Severity, Warning, frame_outline, plan};
 pub use profile::{LaserType, MachineProfile};
 pub use project::{HatchSettings, Object, ObjectKind, Project, ProjectLayer, RasterSettings};
 pub use raster::{Dither, GrayImage};
