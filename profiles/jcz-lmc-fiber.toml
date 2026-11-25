@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Fiber galvo on a JCZ EZCAD2 LMC board.
+
+[machine]
+name = "Fiber galvo (EZCAD2 LMC)"
+driver = "lmc"
+laser = "fiber"
+
+[work_area]
+width_mm = 110
+height_mm = 110
+
+[limits]
+max_power_pct = 100
+max_speed_mm_s = 4000
+hard = []
+
+[framing]
+default_source = "guide_light"  # framing never fires the fiber source by default
+guide_light_port = 8            # check against your board; see NF-8 troubleshooting
+
+[connection]
+usb_vendor_id = 0x9588
+usb_product_id = 0x9899
+correction_file = ""            # path to the .cor file from the machine's EZCAD install

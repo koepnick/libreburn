@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# uv workspace root. The packages live in python/.
+[project]
+name = "libreburn-workspace"
+version = "0.0.0"
+requires-python = ">=3.11"
+license = "AGPL-3.0-or-later"
+dependencies = []
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["python/libreburn", "python/libreburn-desktop"]
+
+[tool.uv.sources]
+libreburn = { workspace = true }
+libreburn-desktop = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "libreburn[repl]",
+    "libreburn-desktop[console]",
+    "pytest>=8",
+    "ruff>=0.8",
+    "pyright>=1.1.390",
+    "pre-commit>=4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["python/libreburn/src", "python/libreburn-desktop/src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.pytest.ini_options]
+testpaths = ["python/libreburn/tests", "python/libreburn-desktop/tests"]
+addopts = "--import-mode=importlib"

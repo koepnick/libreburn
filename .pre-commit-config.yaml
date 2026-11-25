@@ -1,0 +1,36 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all --
+        language: system
+        types: [rust]
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace --all-targets -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types_or: [python, pyi]
+      - id: spdx
+        name: SPDX headers
+        entry: python3 tools/check_spdx.py
+        language: system
+        pass_filenames: false
+      - id: stubs
+        name: PyO3 stubs
+        entry: python3 tools/check_stubs.py
+        language: system
+        files: ^(crates/libreburn-py/|python/libreburn/src/libreburn/_core\.pyi)
+        pass_filenames: false

@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# OmTech K40 with a Ruida controller. Model and scramble key still to confirm.
+
+[machine]
+name = "HIL: OmTech K40 (Ruida)"
+driver = "ruida"
+laser = "co2"
+hil = true
+
+[work_area]
+width_mm = 300
+height_mm = 200
+
+[limits]
+max_power_pct = 0            # HIL: power capped at zero, on top of removed keys
+max_speed_mm_s = 400
+accel_mm_s2 = 3000
+max_continuous_on_s = 600
+duty_cycle_pct = 80
+hard = ["max_power_pct"]
+
+[framing]
+default_source = "laser_off"
+
+[connection]
+transport = "udp"            # or "serial"
+host = "192.168.1.100"
+magic = 0x88

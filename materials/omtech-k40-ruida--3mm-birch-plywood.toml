@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# One entry per file (FR-7), so sync tools such as Syncthing never conflict.
+machine = "OmTech K40 (Ruida)"
+material = "Birch plywood"
+thickness_mm = 3.0
+
+[cut]
+speed_mm_s = 8
+power_pct = 60
+passes = 2
+
+[engrave]
+speed_mm_s = 250
+power_pct = 20

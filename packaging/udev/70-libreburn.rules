@@ -1,0 +1,4 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# JCZ EZCAD2 LMC galvo board
+SUBSYSTEM=="usb", ATTR{idVendor}=="9588", ATTR{idProduct}=="9899", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+# Ruida over USB serial: add your adapter's IDs here after checking `lsusb`.

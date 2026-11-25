@@ -1,0 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: Bug report
+description: Something went wrong with a machine, a job, or the app
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations: { required: true }
+  - type: input
+    id: error-code
+    attributes:
+      label: Error code
+      description: The LB-... code from the error message, if there was one.
+  - type: input
+    id: machine
+    attributes:
+      label: Machine and controller
+      placeholder: OmTech K40 / Ruida RDC6442S over Ethernet
+    validations: { required: true }
+  - type: input
+    id: platform
+    attributes:
+      label: OS and architecture
+      placeholder: Arch Linux x86_64, Wayland / Raspberry Pi OS 64-bit on a Pi 5
+    validations: { required: true }
+  - type: textarea
+    id: trace
+    attributes:
+      label: Protocol trace
+      description: >-
+        Attach the protocol trace file if you can capture one. It holds the raw
+        bytes sent and received, which is what most driver bugs need.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Service log
+      render: text

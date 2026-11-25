@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Service image: ghcr.io/koepnick/libreburn (amd64 and arm64).
+#
+#   podman run --rm -p 127.0.0.1:7878:7878 ghcr.io/koepnick/libreburn
+#
+# Ethernet Ruida boards need only network access. For USB devices (EZCAD2 LMC,
+# Ruida over USB serial) pass the device through, for example:
+#   --device /dev/bus/usb/001/004      (LMC; find it with lsusb)
+#   --device /dev/ttyUSB0              (Ruida USB serial)
+# and install packaging/udev/70-libreburn.rules on the host.
+
+FROM docker.io/library/rust:1.97-bookworm AS build
+WORKDIR /src
+COPY . .
+RUN cargo build --release --locked -p libreburn-service
+
+FROM docker.io/library/debian:bookworm-slim
+RUN useradd --system --uid 10001 --create-home libreburn
+COPY --from=build /src/target/release/libreburnd /usr/local/bin/libreburnd
+COPY profiles /usr/share/libreburn/profiles
+USER libreburn
+EXPOSE 7878
+# Inside the container, listen on all interfaces; publish the port on 127.0.0.1 only
+# unless remote access is set up with a token (AR-4).
+ENV LIBREBURN_LISTEN=0.0.0.0:7878 \
+    LIBREBURN_ALLOW_REMOTE=true
+ENTRYPOINT ["/usr/local/bin/libreburnd", "--json-logs"]

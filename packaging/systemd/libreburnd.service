@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# systemd user service: install to ~/.config/systemd/user/ and run
+#   systemctl --user enable --now libreburnd
+[Unit]
+Description=libreburn laser control service
+
+[Service]
+ExecStart=%h/.local/bin/libreburnd --json-logs
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

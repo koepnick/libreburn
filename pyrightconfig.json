@@ -1,0 +1,8 @@
+{
+  "include": ["python/libreburn/src", "python/libreburn-desktop/src", "python/libreburn/tests", "python/libreburn-desktop/tests", "tools"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.11",
+  "typeCheckingMode": "standard",
+  "reportMissingModuleSource": "none"
+}
