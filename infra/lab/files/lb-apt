@@ -1,0 +1,28 @@
+#!/bin/bash
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# /usr/local/sbin/lb-apt: the only package command the agent user may run with sudo.
+#   sudo lb-apt update | install <pkg>... | upgrade
+# Plain `apt-get install *` in sudoers is root for anyone: `-o APT::...::Pre-Invoke=sh`
+# or a local .deb runs arbitrary code. This accepts archive package names only.
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin DEBIAN_FRONTEND=noninteractive
+cd /
+die() { echo "lb-apt: $*" >&2; exit 2; }
+cmd="${1:-}"; shift || true
+log() { logger -t lb-apt -- "user=${SUDO_USER:-?} $cmd $*"; }
+case "$cmd" in
+  update)
+    [ $# -eq 0 ] || die "update takes no arguments"
+    log; exec apt-get update ;;
+  upgrade)
+    [ $# -eq 0 ] || die "upgrade takes no arguments"
+    log; exec apt-get -y upgrade ;;
+  install)
+    [ $# -ge 1 ] || die "install needs package names"
+    for p in "$@"; do
+      [[ "$p" =~ ^[a-z0-9][a-z0-9+.-]*[a-z0-9](:(amd64|arm64|all))?$ ]] || die "not a package name: $p"
+      case "$p" in *.deb|*.dsc|*.changes) die "not a package name: $p" ;; esac
+    done
+    log "$@"; exec apt-get install -y --no-install-recommends -- "$@" ;;
+  *) die "usage: lb-apt update | upgrade | install <pkg>..." ;;
+esac

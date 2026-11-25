@@ -5,7 +5,9 @@
 #
 # Safety: HIL profiles cap laser power at zero (checked below before any
 # hardware is touched), on top of the removed keys on the test machines. The
-# tests cover protocol replies, parameter reads and motion only.
+# tests cover protocol replies, parameter reads and motion only. Once the GPIO
+# wiring is in, hil/run.sh also requires the interlock to read closed and fails
+# on any laser-activity signal (docs/lab-setup.md). PRs from forks never run here.
 name: Hardware tests
 
 on:
@@ -29,13 +31,14 @@ jobs:
     name: HIL, Ruida K40
     if: >-
       vars.HIL_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'hil')) &&
+      (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'hil') &&
+        github.event.pull_request.head.repo.fork != true)) &&
       (github.event_name != 'workflow_dispatch' || inputs.machine != 'galvo')
     runs-on: [self-hosted, hil-ruida]
     concurrency:
       group: hil-ruida
       cancel-in-progress: false
-    timeout-minutes: 30
+    timeout-minutes: 60  # the first build on the Pi is slow; later runs reuse target/
     env:
       LIBREBURN_HIL_PROFILE: hil/profiles/hil-omtech-k40-ruida.toml
       # The board's address is a runner environment variable (LIBREBURN_RUIDA_HOST), not a secret.
@@ -43,23 +46,26 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable; rust-toolchain.toml pins the version
       - run: hil/run.sh ruida
 
   galvo:
     name: HIL, galvo
     if: >-
       vars.HIL_ENABLED == 'true' &&
-      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'hil')) &&
+      (github.event_name != 'pull_request' || (contains(github.event.pull_request.labels.*.name, 'hil') &&
+        github.event.pull_request.head.repo.fork != true)) &&
       (github.event_name != 'workflow_dispatch' || inputs.machine != 'ruida')
     runs-on: [self-hosted, hil-galvo]
     concurrency:
       group: hil-galvo
       cancel-in-progress: false
-    timeout-minutes: 30
+    timeout-minutes: 60  # the first build on the Pi is slow; later runs reuse target/
     env:
       LIBREBURN_HIL_PROFILE: hil/profiles/hil-jcz-lmc-fiber.toml
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable; rust-toolchain.toml pins the version
       - run: hil/run.sh lmc

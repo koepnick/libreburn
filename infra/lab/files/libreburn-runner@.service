@@ -1,0 +1,43 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# One GitHub Actions runner per locked-down system user (%i), installed by
+# infra/lab/provision.sh. Jobs run as that user, with no sudo, no docker group,
+# a read-only view of the OS and no view of /home or other users' processes.
+# Per-role drop-ins live in libreburn-runner@<user>.service.d/.
+[Unit]
+Description=GitHub Actions runner (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=%i
+Group=%i
+WorkingDirectory=/var/lib/libreburn-runners/%i/runner
+ExecStart=/var/lib/libreburn-runners/%i/runner/run.sh
+EnvironmentFile=-/etc/libreburn/runners/%i.env
+Restart=always
+RestartSec=10
+KillMode=control-group
+KillSignal=SIGINT
+TimeoutStopSec=60
+
+# Sandbox
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/libreburn-runners/%i
+ProtectHome=tmpfs
+PrivateTmp=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RemoveIPC=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
