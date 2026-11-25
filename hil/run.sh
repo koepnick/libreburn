@@ -11,7 +11,21 @@ case "$profile" in
   *) echo "LIBREBURN_HIL_PROFILE must be a file in hil/profiles/, got $profile" >&2; exit 1 ;;
 esac
 
+case "$driver" in
+  ruida) machine=ruida ;;
+  lmc) machine=galvo ;;
+  *) echo "unknown driver $driver" >&2; exit 1 ;;
+esac
+
 # Second safeguard: refuse to touch hardware unless every HIL profile caps power at zero.
 cargo test -p libreburn-core --test repo_profiles --locked
 
-cargo test -p "libreburn-driver-$driver" --locked -- --ignored hil_
+# Build before the guarded step so the guard only covers the hardware run.
+cargo test -p "libreburn-driver-$driver" --locked --no-run
+
+# Third safeguard, once the GPIO wiring is in (docs/lab-setup.md): refuse to start
+# unless the machine's interlock reads closed, stop if it opens, and fail if the
+# laser-activity input fires. While /etc/libreburn/hil-guard.toml has
+# enabled = false (the default) this runs the tests directly and says so.
+exec python3 hil/guard/libreburn_hil_guard.py exec --machine "$machine" -- \
+  cargo test -p "libreburn-driver-$driver" --locked -- --ignored hil_

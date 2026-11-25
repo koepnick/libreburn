@@ -18,19 +18,22 @@ under QEMU user-mode (`.cargo/config.toml` sets the linker and runner). This
 is much faster than a full ARM64 VM, which KVM cannot accelerate on x86.
 
 Until the workstation runner is registered, the job runs on a GitHub-hosted
-runner. To move it, register the runner with the labels `self-hosted` and
-`arm64-cross`, install `gcc-aarch64-linux-gnu`, `libc6-dev-arm64-cross` and
-`qemu-user`, then set the repository variable:
+runner. To move it, provision and register the workstation runner
+([lab-setup.md](lab-setup.md)), then set the repository variable:
 
 ```
 ARM64_RUNNER = ["self-hosted","arm64-cross"]
 ```
 
+PRs from forks always run this job on a hosted runner, so outside code never
+reaches the lab machines.
+
 ## Hardware tests
 
 `hil.yml` does nothing until the repository variable `HIL_ENABLED` is `true`,
-so nightly runs never queue against runners that don't exist yet. See
-`hil/README.md` for runner setup and the safety rules.
+so nightly runs never queue against runners that don't exist yet, and never
+runs for PRs from forks. See `hil/README.md` for the safety rules and
+[lab-setup.md](lab-setup.md) for the runners.
 
 ## Repository settings to apply by hand
 

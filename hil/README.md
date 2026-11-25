@@ -14,14 +14,16 @@ Safety rules:
   with any other value.
 - Galvo framing uses the guide light only.
 - One job at a time per machine (a `concurrency` group per runner).
+- Once the GPIO wiring is in, `hil/run.sh` also refuses to run unless the
+  machine's interlock reads closed, and fails on any laser-activity signal
+  (`hil/guard/`). It is off until enabled; see
+  [docs/lab-setup.md](../docs/lab-setup.md#hil-guard-day-2).
 
-Runner setup:
-
-- Run the runner as an unprivileged user, with udev rules for the LMC USB
-  device and the Ruida USB serial port (`packaging/udev/`).
-- Put the Ruida board on a separate network segment that only the test
-  workstation can reach. Set its address in the runner's environment as
-  `LIBREBURN_RUIDA_HOST`; it is not a secret.
+Runner setup: the HIL runner lives on the Pi 5 and is provisioned by
+`infra/lab/provision.sh` as an unprivileged user with laser access through
+groups and udev rules only. See [docs/lab-setup.md](../docs/lab-setup.md),
+which also covers isolating the Ruida's network segment and setting
+`LIBREBURN_RUIDA_HOST`.
 
 `fixtures/` holds recorded protocol exchanges from the real boards, which the
 mock transports replay in normal CI (NF-7).

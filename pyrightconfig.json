@@ -1,5 +1,5 @@
 {
-  "include": ["python/libreburn/src", "python/libreburn-desktop/src", "python/libreburn/tests", "python/libreburn-desktop/tests", "tools"],
+  "include": ["python/libreburn/src", "python/libreburn-desktop/src", "python/libreburn/tests", "python/libreburn-desktop/tests", "tools", "hil/guard"],
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.11",

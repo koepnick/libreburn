@@ -36,5 +36,5 @@ src = ["python/libreburn/src", "python/libreburn-desktop/src"]
 select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
 
 [tool.pytest.ini_options]
-testpaths = ["python/libreburn/tests", "python/libreburn-desktop/tests"]
+testpaths = ["python/libreburn/tests", "python/libreburn-desktop/tests", "hil/guard/tests"]
 addopts = "--import-mode=importlib"

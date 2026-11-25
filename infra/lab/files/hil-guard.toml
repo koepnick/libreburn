@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# /etc/libreburn/hil-guard.toml: GPIO guard for the HIL rig. See docs/lab-setup.md.
+# Off until the interlock and laser-activity wiring is in and commissioned.
+# Turn on with: sudo infra/lab/provision.sh hil-guard enable
+enabled = false
+runner_unit = "libreburn-runner@ghr-hil.service"
+start_runner_when_safe = true
+
+# Line names are the Pi 5's (gpioinfo lists them). All inputs are active low
+# with internal pull-ups: closed contact or conducting optocoupler to GND.
+[machines.ruida]
+enabled = true
+interlock = "GPIO17"     # header pin 11
+laser_active = "GPIO27"  # header pin 13
+harness = "GPIO5"        # header pin 29
+
+[machines.galvo]
+enabled = true
+interlock = "GPIO23"     # header pin 16
+laser_active = "GPIO24"  # header pin 18
+harness = "GPIO6"        # header pin 31

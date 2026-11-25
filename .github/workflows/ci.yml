@@ -72,7 +72,10 @@ jobs:
     # Cross-compiles on an x86_64 host and runs the test binaries under QEMU user-mode.
     # Set the repository variable ARM64_RUNNER to '["self-hosted","arm64-cross"]' once the
     # workstation runner is registered; until then this runs on a GitHub-hosted runner.
-    runs-on: ${{ vars.ARM64_RUNNER && fromJSON(vars.ARM64_RUNNER) || 'ubuntu-24.04' }}
+    # PRs from forks always use a hosted runner: their code never runs on the lab machines.
+    runs-on: >-
+      ${{ vars.ARM64_RUNNER && github.event.pull_request.head.repo.fork != true
+      && fromJSON(vars.ARM64_RUNNER) || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -84,7 +87,7 @@ jobs:
         with:
           key: aarch64
       - name: Cross toolchain and QEMU
-        if: ${{ !vars.ARM64_RUNNER }}
+        if: runner.environment == 'github-hosted'
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user
       - name: Test (Rust, aarch64 under QEMU)
         # libreburn-py links libpython; its aarch64 wheel is built by maturin in the release workflow.
