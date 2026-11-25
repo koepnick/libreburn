@@ -17,6 +17,8 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 libreburn-core.workspace = true
 libreburn-driver-ruida.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 pyo3 = { workspace = true, features = ["abi3-py311"] }
 
 [features]

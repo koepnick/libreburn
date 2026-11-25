@@ -787,6 +787,8 @@ dependencies = [
  "libreburn-core",
  "libreburn-driver-ruida",
  "pyo3",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
