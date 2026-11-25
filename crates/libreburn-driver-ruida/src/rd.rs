@@ -6,12 +6,18 @@
 //! (Copyright (c) 2021 meerk40t, MIT License), trimmed to the commands the
 //! board needs.
 //!
-//! Safety: power for every layer is clamped to the profile's
-//! `limits.max_power_pct`. If that clamp leaves a layer at zero power, its
-//! burn moves are sent as plain moves, so no cut opcode reaches the board.
-//! HIL profiles cap power at zero, so a HIL job never contains a cut.
+//! Safety: power for every move goes through `Job::power_for`, so it is
+//! clamped to the profile's `limits.max_power_pct`. If the profile caps power
+//! at zero (HIL profiles), burn moves are sent as plain moves, so no cut
+//! opcode reaches the board at all.
+//!
+//! A burn whose power is zero (the planner's raster gaps and overscan) is
+//! sent as a cut at 0 % power, so the head keeps the layer speed with the
+//! laser off.
 
-use libreburn_core::{Error, ErrorCode, Job, MachineProfile, Result, effective_power_pct};
+use libreburn_core::{
+    Error, ErrorCode, Job, MachineProfile, MoveKind, Result, effective_power_pct,
+};
 
 use crate::codec::{self, REL_LIMIT_UM, cmd, encode_coord, encode_power, encode_speed};
 use crate::protocol::MAX_PACKET_PAYLOAD;
@@ -283,13 +289,14 @@ pub fn encode_job(job: &Job, profile: &MachineProfile) -> Result<Vec<Vec<u8>>> {
         // Travel is 0; burns use the move or layer power, clamped to the cap.
         let power = job.power_for(m, profile);
         part.fires |= power > 0.0;
-        targets.push((m.layer, p, power));
+        targets.push((m.layer, p, m.kind == MoveKind::Burn, power));
     }
     let used: Vec<Part> = parts.into_iter().flatten().collect();
+    let cuts_allowed = effective_power_pct(100.0, profile) > 0.0;
     let mut w = Writer::new();
     header(&mut w, &used);
     let mut current: Option<usize> = None;
-    for (layer, (x, y), power) in targets {
+    for (layer, (x, y), burn, power) in targets {
         if current != Some(layer) {
             if current.is_some() {
                 layer_end(&mut w);
@@ -301,7 +308,7 @@ pub fn encode_job(job: &Job, profile: &MachineProfile) -> Result<Vec<Vec<u8>>> {
             layer_settings(&mut w, part);
             current = Some(layer);
         }
-        let cut = power > 0.0;
+        let cut = burn && cuts_allowed;
         if cut && power != w.power {
             w.set_power(power);
         }
@@ -472,6 +479,18 @@ mod tests {
         assert!(cmds.contains(&max1(70.0)));
         assert!(cmds.contains(&max1(10.0)));
         assert!(!cmds.contains(&max1(90.0)));
+    }
+
+    #[test]
+    fn zero_power_burns_are_laser_off_cuts() {
+        let mut job = square(30.0);
+        job.moves.push(Move::burn(30.0, 20.0, 0).with_power(0.0));
+        let cmds = encode_job(&job, &profile(70.0)).unwrap();
+        assert_eq!(cuts(&cmds), 5);
+        let i = cmds.len() - 6;
+        // The gap is preceded by a power change to 0 % and is itself a cut.
+        assert!(cmds[..i].ends_with(&[cmd(&[&codec::power::MAX_POWER_2, &encode_power(0.0)])]));
+        assert_eq!(cmds[i][0], codec::CUT_ABS_XY);
     }
 
     #[test]

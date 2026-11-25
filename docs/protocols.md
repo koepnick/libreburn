@@ -28,6 +28,8 @@ none of MeerK40t's GUI code is used.
 | Power | 14-bit, 16383 = 100 % | from MeerK40t |
 | Rapid move option byte for jog (`D9 10 00 ...`) | `0x00` | unconfirmed |
 | Per-move power change mid-layer (`C6 01/02` inline) | | unconfirmed |
+| Raster gaps (burn at 0 % power) sent as cuts at 0 % to keep layer speed | | unconfirmed |
+| USB serial: 115200 8N1, RTS/CTS, DTR on (`transport = "serial"`, `serial_port`) | | from MeerK40t |
 
 `sim::RuidaSim` is a software controller that checks checksums, argument
 lengths and the job file sum and records where the laser would fire. Every
