@@ -32,3 +32,29 @@ none of MeerK40t's GUI code is used.
 `sim::RuidaSim` is a software controller that checks checksums, argument
 lengths and the job file sum and records where the laser would fire. Every
 driver test runs against it, including over a real localhost UDP socket.
+
+## EZCAD2 LMC galvo (`libreburn-driver-lmc`)
+
+Opcodes, the 12-byte command and 3072-byte list packet formats, status bits,
+unit conversions (fiber power `0..0xFFF`, Q-switch period `20000 / kHz`,
+speed in galvo units per ms), the init sequence and the light-mode and
+program-mode port handling follow MeerK40t's `meerk40t/balormk/controller.py`
+(Copyright (c) 2021 meerk40t, MIT License), which descends from the balor
+project. No MeerK40t GUI code is used.
+
+Red-light framing sets only the guide-light output bit
+(`framing.guide_light_port`; MeerK40t's default is 8) and only uses jump
+commands, with the fiber master oscillator closed. The laser-enable output is
+`connection.laser_enable_port` (default 0, as in MeerK40t's program mode). A
+profile that puts the guide light on the same bit is refused, because that
+is exactly the setting that makes "framing" fire the fiber source.
+
+| Item | Status |
+| --- | --- |
+| Init values (laser mode, timing, standby, FPK) | MeerK40t defaults, unconfirmed |
+| Guide-light bit 8 / enable bit 0 | MeerK40t defaults, check per machine |
+| `.cor` correction files | not loaded yet; a blank table is sent |
+
+`sim::LmcSim` tracks port bits, MO state and list execution, and records
+every mark attempt, every firing segment with its power, and every jump
+traced with the guide light on.
