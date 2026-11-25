@@ -40,7 +40,9 @@ jobs:
       LIBREBURN_HIL_PROFILE: hil/profiles/hil-omtech-k40-ruida.toml
       # The board's address is a runner environment variable (LIBREBURN_RUIDA_HOST), not a secret.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: hil/run.sh ruida
 
   galvo:
@@ -57,5 +59,7 @@ jobs:
     env:
       LIBREBURN_HIL_PROFILE: hil/profiles/hil-jcz-lmc-fiber.toml
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: hil/run.sh lmc

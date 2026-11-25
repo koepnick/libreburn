@@ -11,6 +11,14 @@ git commit -s
 
 CI checks that each commit has a `Signed-off-by:` line matching its author.
 
+## Signed commits
+
+`main` requires signed commits. Sign with an SSH key (`git config gpg.format
+ssh`, `commit.gpgsign true`) and add it to GitHub as a *Signing Key*; setup
+steps are in [docs/supply-chain.md](docs/supply-chain.md#signing-your-commits-ssh).
+The sign-off line above and the cryptographic signature are separate: you need
+both.
+
 ## License headers
 
 Every source file starts with:

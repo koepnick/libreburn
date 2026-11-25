@@ -1,6 +1,14 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 # Desktop bundles on version tags: AppImage and Flatpak for x86_64 and aarch64.
 # Both bundle the client and the service so one install works offline (PL-6).
+#
+# Supply chain (docs/supply-chain.md):
+#   - Every file is covered by a GitHub artifact attestation (SLSA build provenance).
+#   - GPG detached signatures are added only when the RELEASE_GPG_PRIVATE_KEY secret
+#     exists in the `release` environment; until then that step is skipped.
+#   - PyPI and crates.io use Trusted Publishing (OIDC, no stored tokens) and stay off
+#     until the repository variables PUBLISH_PYPI / PUBLISH_CRATES are 'true'.
+#   - Jobs that compile code never see a secret; signing and publishing jobs build nothing.
 name: Release
 
 on:
@@ -9,7 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   wheels:
@@ -19,17 +27,40 @@ jobs:
       matrix:
         target: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: PyO3/maturin-action@v1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
           target: ${{ matrix.target }}
           working-directory: python/libreburn
           args: --release --out dist
           manylinux: auto
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wheels-${{ matrix.target }}
           path: python/libreburn/dist/*.whl
+
+  sdists:
+    name: Python sdist and desktop package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          command: sdist
+          working-directory: python/libreburn
+          args: --out ../../dist
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          enable-cache: false   # no caches in release builds
+      - run: uv build --package libreburn-desktop --out-dir dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-sdists
+          path: dist/*
 
   appimage:
     name: AppImage (${{ matrix.arch }})
@@ -43,13 +74,15 @@ jobs:
             runner: ${{ vars.ARM64_RUNNER || '"ubuntu-24.04"' }}
     runs-on: ${{ fromJSON(matrix.runner) }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: wheels-${{ matrix.arch }}
           path: dist
       - run: packaging/appimage/build.sh ${{ matrix.arch }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: appimage-${{ matrix.arch }}
           path: "*.AppImage"
@@ -65,35 +98,122 @@ jobs:
             runner: ${{ vars.ARM64_RUNNER || '"ubuntu-24.04"' }}
     runs-on: ${{ fromJSON(matrix.runner) }}
     container:
-      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.8
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.8@sha256:ac50638b16b2111a1778250aad46cf1e52cc3779718ec7a4c978a1fe495b3050
       options: --privileged
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-qemu-action@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
         if: matrix.arch == 'aarch64'
         with:
           platforms: arm64
-      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@933e9e8ca36e85046ebca8e211f0785c6becac40 # master, 2026-11
         with:
           bundle: libreburn-${{ matrix.arch }}.flatpak
           manifest-path: packaging/flatpak/io.github.koepnick.libreburn.yml
           arch: ${{ matrix.arch }}
           cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
 
-  publish:
-    name: GitHub release
-    needs: [appimage, flatpak]
-    if: startsWith(github.ref, 'refs/tags/v')
+  attest:
+    name: Build provenance
+    needs: [wheels, sdists, appimage, flatpak]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: out
           merge-multiple: true
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            out/*.AppImage
+            out/*.flatpak
+            out/*.whl
+            out/*.tar.gz
+
+  publish:
+    name: GitHub release
+    needs: attest
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    environment: release
+    permissions:
+      contents: write
+    env:
+      GPG_KEY: ${{ secrets.RELEASE_GPG_PRIVATE_KEY }}
+      GPG_PASSPHRASE: ${{ secrets.RELEASE_GPG_PASSPHRASE }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        working-directory: out
+        run: sha256sum -- *.AppImage *.flatpak *.whl *.tar.gz > SHA256SUMS
+      - name: GPG signatures (only once the release key secret exists)
+        if: env.GPG_KEY != ''
+        working-directory: out
+        run: |
+          export GNUPGHOME="$(mktemp -d)"
+          trap 'gpgconf --kill all; rm -rf "$GNUPGHOME"' EXIT
+          gpg --batch --import <<< "$GPG_KEY"
+          sign() {
+            gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+              --armor --detach-sign --output "$1.asc" "$1" <<< "$GPG_PASSPHRASE"
+          }
+          for f in *.AppImage *.flatpak *.whl *.tar.gz SHA256SUMS; do sign "$f"; done
+          gpg --batch --armor --export > libreburn-release-key.asc
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           draft: true
           files: |
             out/*.AppImage
             out/*.flatpak
             out/*.whl
+            out/*.tar.gz
+            out/SHA256SUMS
+            out/*.asc
+
+  pypi:
+    name: Publish to PyPI
+    needs: attest
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_PYPI == 'true'
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/libreburn/
+    permissions:
+      id-token: write   # Trusted Publishing; the action also uploads PEP 740 attestations
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: "{wheels-*,python-sdists}"
+          path: dist
+          merge-multiple: true
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+
+  crates:
+    name: Publish to crates.io
+    needs: attest
+    if: startsWith(github.ref, 'refs/tags/v') && vars.PUBLISH_CRATES == 'true'
+    runs-on: ubuntu-24.04
+    environment: crates-io
+    permissions:
+      contents: read
+      id-token: write   # Trusted Publishing
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable; rust-toolchain.toml pins the version
+      - uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+        id: auth
+      # Publishes every crate without `publish = false`, in dependency order.
+      - run: cargo publish --workspace --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

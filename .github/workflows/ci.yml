@@ -23,12 +23,14 @@ jobs:
     name: Lint and format
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable  # rust-toolchain.toml pins the version
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable; rust-toolchain.toml pins the version
         with:
           components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - uses: astral-sh/setup-uv@v6
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - name: Install Python dependencies
         run: uv sync --locked
       - run: cargo fmt --all --check
@@ -40,18 +42,22 @@ jobs:
         run: python3 tools/check_spdx.py
       - name: Python stubs cover the PyO3 module
         run: python3 tools/check_stubs.py
+      - name: Workflow security audit (zizmor)
+        run: uvx zizmor@1.33.1 --offline --min-severity low .github/workflows
 
   test-x86_64:
     name: Unit tests (x86_64)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - uses: taiki-e/install-action@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable; rust-toolchain.toml pins the version
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - uses: taiki-e/install-action@893d6ee8d714b6c7dfe2bcd94e5759e9a7958a7e # v2.90.10
         with:
           tool: cargo-nextest
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - name: Qt runtime libraries for offscreen tests
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
       - run: cargo nextest run --workspace --locked
@@ -68,11 +74,13 @@ jobs:
     # workstation runner is registered; until then this runs on a GitHub-hosted runner.
     runs-on: ${{ vars.ARM64_RUNNER && fromJSON(vars.ARM64_RUNNER) || 'ubuntu-24.04' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable; rust-toolchain.toml pins the version
         with:
           targets: aarch64-unknown-linux-gnu
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: aarch64
       - name: Cross toolchain and QEMU
@@ -83,7 +91,7 @@ jobs:
         run: cargo test --workspace --exclude libreburn-py --target aarch64-unknown-linux-gnu --locked
       - name: Build release binary
         run: cargo build --release -p libreburn-service --target aarch64-unknown-linux-gnu --locked
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: libreburnd-aarch64
           path: target/aarch64-unknown-linux-gnu/release/libreburnd
@@ -94,8 +102,9 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Every commit has a Signed-off-by line
         env:

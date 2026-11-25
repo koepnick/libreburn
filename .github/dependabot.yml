@@ -1,16 +1,29 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
+# Every ecosystem waits a few days after a release before proposing it
+# (cooldown), so a hijacked release is usually pulled before it reaches us.
+# Actions and base images are pinned to SHAs/digests; Dependabot keeps the
+# pins and their version comments current.
 version: 2
 updates:
   - package-ecosystem: cargo
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       rust-minor: { update-types: [minor, patch] }
   - package-ecosystem: uv
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
     groups:
       python-minor: { update-types: [minor, patch] }
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups:
+      actions-minor: { update-types: [minor, patch] }
+  - package-ecosystem: docker
+    directory: /packaging/container
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
