@@ -1,0 +1,3 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+self-hosted-runner:
+  labels: [arm64-cross, hil-ruida, hil-galvo]

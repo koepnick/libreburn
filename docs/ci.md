@@ -9,7 +9,7 @@
 | `container.yml` | Multi-arch image to `ghcr.io/koepnick/libreburn` | hosted amd64 + `ARM64_RUNNER` | Merges to main, tags | No |
 | `hil.yml` | HIL, Ruida K40 | self-hosted `hil-ruida` | Dispatch, nightly, `hil` label | No |
 | `hil.yml` | HIL, galvo | self-hosted `hil-galvo` | Dispatch, nightly, `hil` label | No |
-| `release.yml` | Wheels, AppImage, Flatpak | hosted + `ARM64_RUNNER` | Version tags | No |
+| `release.yml` | Wheels, sdists, AppImage, Flatpak, provenance; GitHub release, PyPI, crates.io | hosted + `ARM64_RUNNER` | Version tags | No |
 
 ## aarch64
 
@@ -34,11 +34,34 @@ so nightly runs never queue against runners that don't exist yet. See
 
 ## Repository settings to apply by hand
 
-- Protect `main`: PRs only, required checks (the four `ci.yml` jobs above),
-  linear history, no force pushes.
-- Create the `hil` label.
+See the owner setup checklist in [supply-chain.md](supply-chain.md): merge
+settings, the `main` and `v*` rulesets (including signed commits), the
+`release`, `pypi` and `crates-io` environments, and the `hil` label.
 
-## Secrets
+## Secrets and variables
 
-None yet. `GITHUB_TOKEN` pushes to GHCR. A release-signing key and a Flathub
-token come later.
+`GITHUB_TOKEN` pushes to GHCR, and OIDC covers Sigstore signing, attestations,
+PyPI and crates.io, so most of CI needs no stored secrets.
+
+| Name | Kind | Scope | Purpose |
+| --- | --- | --- | --- |
+| `RELEASE_GPG_PRIVATE_KEY` | secret | `release` environment | Detached GPG signatures on release files; skipped while unset |
+| `RELEASE_GPG_PASSPHRASE` | secret | `release` environment | Passphrase for that key, if any |
+| `PUBLISH_PYPI` | variable | repository | `true` once PyPI trusted publishers exist |
+| `PUBLISH_CRATES` | variable | repository | `true` once crates.io trusted publishing is set up |
+| `ARM64_RUNNER` | variable | repository | See aarch64 above |
+| `HIL_ENABLED` | variable | repository | See hardware tests above |
+
+A Flathub token comes later.
+
+## Workflow rules
+
+- Pin every action to a full commit SHA with the version in a comment
+  (`uses: owner/action@<sha> # v1.2.3`). Dependabot updates both.
+- Give each job only the `permissions:` it needs; the workflow default is
+  `contents: read`.
+- Check out with `persist-credentials: false`.
+- Never hand a secret to a job that compiles code.
+
+The "Lint and format" job runs zizmor over the workflows, and actionlint
+reads `.github/actionlint.yaml` for the self-hosted runner labels.
