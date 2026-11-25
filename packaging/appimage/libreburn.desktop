@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=libreburn
+Comment=Laser control for Ruida and EZCAD2 galvo machines
+Exec=libreburn
+Icon=libreburn
+Categories=Graphics;Engineering;

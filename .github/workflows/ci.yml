@@ -1,0 +1,104 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  merge_group:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable  # rust-toolchain.toml pins the version
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+      - name: Install Python dependencies
+        run: uv sync --locked
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pyright
+      - name: SPDX headers
+        run: python3 tools/check_spdx.py
+      - name: Python stubs cover the PyO3 module
+        run: python3 tools/check_stubs.py
+
+  test-x86_64:
+    name: Unit tests (x86_64)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      - uses: astral-sh/setup-uv@v6
+      - name: Qt runtime libraries for offscreen tests
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
+      - run: cargo nextest run --workspace --locked
+      - run: cargo test --workspace --doc --locked
+      - run: uv sync --locked
+      - run: uv run pytest
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+  test-aarch64:
+    name: Build and unit tests (aarch64)
+    # Cross-compiles on an x86_64 host and runs the test binaries under QEMU user-mode.
+    # Set the repository variable ARM64_RUNNER to '["self-hosted","arm64-cross"]' once the
+    # workstation runner is registered; until then this runs on a GitHub-hosted runner.
+    runs-on: ${{ vars.ARM64_RUNNER && fromJSON(vars.ARM64_RUNNER) || 'ubuntu-24.04' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-gnu
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64
+      - name: Cross toolchain and QEMU
+        if: ${{ !vars.ARM64_RUNNER }}
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu libc6-dev-arm64-cross qemu-user
+      - name: Test (Rust, aarch64 under QEMU)
+        # libreburn-py links libpython; its aarch64 wheel is built by maturin in the release workflow.
+        run: cargo test --workspace --exclude libreburn-py --target aarch64-unknown-linux-gnu --locked
+      - name: Build release binary
+        run: cargo build --release -p libreburn-service --target aarch64-unknown-linux-gnu --locked
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libreburnd-aarch64
+          path: target/aarch64-unknown-linux-gnu/release/libreburnd
+          retention-days: 7
+
+  dco:
+    name: DCO sign-off
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Every commit has a Signed-off-by line
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 tools/check_dco.py "$BASE" "$HEAD"

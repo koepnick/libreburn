@@ -1,0 +1,61 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Hardware-in-the-loop tests. They run only by manual dispatch, nightly, or on a
+# PR labelled `hil`, and only once the repository variable HIL_ENABLED is 'true'
+# (so nothing queues before the runners exist).
+#
+# Safety: HIL profiles cap laser power at zero (checked below before any
+# hardware is touched), on top of the removed keys on the test machines. The
+# tests cover protocol replies, parameter reads and motion only.
+name: Hardware tests
+
+on:
+  workflow_dispatch:
+    inputs:
+      machine:
+        description: Which machine to test
+        type: choice
+        options: [both, ruida, galvo]
+        default: both
+  schedule:
+    - cron: "17 3 * * *"
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  ruida:
+    name: HIL, Ruida K40
+    if: >-
+      vars.HIL_ENABLED == 'true' &&
+      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'hil')) &&
+      (github.event_name != 'workflow_dispatch' || inputs.machine != 'galvo')
+    runs-on: [self-hosted, hil-ruida]
+    concurrency:
+      group: hil-ruida
+      cancel-in-progress: false
+    timeout-minutes: 30
+    env:
+      LIBREBURN_HIL_PROFILE: hil/profiles/hil-omtech-k40-ruida.toml
+      # The board's address is a runner environment variable (LIBREBURN_RUIDA_HOST), not a secret.
+    steps:
+      - uses: actions/checkout@v4
+      - run: hil/run.sh ruida
+
+  galvo:
+    name: HIL, galvo
+    if: >-
+      vars.HIL_ENABLED == 'true' &&
+      (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'hil')) &&
+      (github.event_name != 'workflow_dispatch' || inputs.machine != 'ruida')
+    runs-on: [self-hosted, hil-galvo]
+    concurrency:
+      group: hil-galvo
+      cancel-in-progress: false
+    timeout-minutes: 30
+    env:
+      LIBREBURN_HIL_PROFILE: hil/profiles/hil-jcz-lmc-fiber.toml
+    steps:
+      - uses: actions/checkout@v4
+      - run: hil/run.sh lmc

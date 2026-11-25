@@ -1,0 +1,99 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Desktop bundles on version tags: AppImage and Flatpak for x86_64 and aarch64.
+# Both bundle the client and the service so one install works offline (PL-6).
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  wheels:
+    name: Python wheels (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        target: [x86_64, aarch64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          working-directory: python/libreburn
+          args: --release --out dist
+          manylinux: auto
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}
+          path: python/libreburn/dist/*.whl
+
+  appimage:
+    name: AppImage (${{ matrix.arch }})
+    needs: wheels
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: '"ubuntu-24.04"'
+          - arch: aarch64
+            runner: ${{ vars.ARM64_RUNNER || '"ubuntu-24.04"' }}
+    runs-on: ${{ fromJSON(matrix.runner) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels-${{ matrix.arch }}
+          path: dist
+      - run: packaging/appimage/build.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: "*.AppImage"
+
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: '"ubuntu-24.04"'
+          - arch: aarch64
+            runner: ${{ vars.ARM64_RUNNER || '"ubuntu-24.04"' }}
+    runs-on: ${{ fromJSON(matrix.runner) }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.8
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+        if: matrix.arch == 'aarch64'
+        with:
+          platforms: arm64
+      - uses: flathub-infra/flatpak-github-actions/flatpak-builder@master
+        with:
+          bundle: libreburn-${{ matrix.arch }}.flatpak
+          manifest-path: packaging/flatpak/io.github.koepnick.libreburn.yml
+          arch: ${{ matrix.arch }}
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ github.sha }}
+
+  publish:
+    name: GitHub release
+    needs: [appimage, flatpak]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            out/*.AppImage
+            out/*.flatpak
+            out/*.whl

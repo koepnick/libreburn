@@ -1,0 +1,6 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Cross-compiling for aarch64 on an x86_64 host. Tests run under QEMU user-mode.
+# Needs: gcc-aarch64-linux-gnu, qemu-user (or qemu-user-static).
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
+runner = "qemu-aarch64 -L /usr/aarch64-linux-gnu"

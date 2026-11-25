@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# Project-level rust-analyzer settings, picked up by Neovim's rust-analyzer LSP.
+[cargo]
+allTargets = true
+
+[check]
+command = "clippy"
+
+[procMacro]
+enable = true

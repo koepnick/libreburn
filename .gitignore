@@ -1,0 +1,13 @@
+/target/
+.venv/
+__pycache__/
+*.py[cod]
+*.so
+/dist/
+/build/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+/packaging/flatpak/.flatpak-builder/
+/packaging/flatpak/build-dir/
+*.AppImage
