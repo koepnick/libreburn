@@ -31,6 +31,7 @@ tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal
 axum = "0.8"
 clap = { version = "4", features = ["derive", "env"] }
 pyo3 = "0.30"
+serialport = { version = "4.10", default-features = false }
 kurbo = { version = "0.13", features = ["serde"] }
 usvg = { version = "0.50", default-features = false }
 dxf = "0.6"

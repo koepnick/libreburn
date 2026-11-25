@@ -29,7 +29,7 @@ pub enum Link {
 }
 
 /// Moves raw bytes to and from the controller.
-pub trait Transport: Send {
+pub trait Transport: Send + std::fmt::Debug {
     /// Which link this is.
     fn link(&self) -> Link;
     /// Send bytes exactly as given.
@@ -307,5 +307,231 @@ impl Transport for UdpTransport {
                 Err(e) => return Err(unreachable(format!("UDP receive failed: {e}"))),
             }
         }
+    }
+}
+
+/// USB serial link (FTDI 0403:6001 on RDC644x boards).
+///
+/// MeerK40t opens it at 115200 baud, 8N1, with RTS/CTS and DTR set; the baud
+/// rate does not appear to matter.
+pub struct SerialTransport {
+    port: Box<dyn serialport::SerialPort>,
+    path: String,
+}
+
+impl std::fmt::Debug for SerialTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SerialTransport")
+            .field("path", &self.path)
+            .finish()
+    }
+}
+
+/// Default serial baud rate.
+pub const SERIAL_BAUD: u32 = 115_200;
+
+impl SerialTransport {
+    /// Open a serial device such as `/dev/ttyUSB0`.
+    pub fn open(path: &str, baud: u32) -> Result<Self> {
+        let mut port = serialport::new(path, baud)
+            .data_bits(serialport::DataBits::Eight)
+            .parity(serialport::Parity::None)
+            .stop_bits(serialport::StopBits::One)
+            .flow_control(serialport::FlowControl::Hardware)
+            .timeout(Duration::from_millis(250))
+            .open()
+            .map_err(|e| {
+                Error::new(
+                    ErrorCode::DeviceUnreachable,
+                    "Could not open the Ruida serial port",
+                    format!("{path}: {e}"),
+                    "check the device path, that you are in the dialout group (or the udev \
+                     rule is installed) and that no other program has it open",
+                )
+            })?;
+        port.write_data_terminal_ready(true)
+            .map_err(|e| unreachable(format!("{path}: cannot set DTR: {e}")))?;
+        Ok(Self {
+            port,
+            path: path.to_owned(),
+        })
+    }
+}
+
+impl SerialTransport {
+    /// Wrap an already-open port (tests use a pseudo-terminal pair).
+    pub fn from_port(port: Box<dyn serialport::SerialPort>, name: &str) -> Self {
+        Self {
+            port,
+            path: name.to_owned(),
+        }
+    }
+}
+
+impl Transport for SerialTransport {
+    fn link(&self) -> Link {
+        Link::Serial
+    }
+
+    fn send(&mut self, bytes: &[u8]) -> Result<()> {
+        use std::io::Write;
+        self.port
+            .write_all(bytes)
+            .and_then(|()| self.port.flush())
+            .map_err(|e| unreachable(format!("serial write to {} failed: {e}", self.path)))
+    }
+
+    fn recv(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>> {
+        use std::io::Read;
+        self.port
+            .set_timeout(timeout.max(Duration::from_millis(1)))
+            .map_err(|e| unreachable(e.to_string()))?;
+        let mut buf = [0u8; 256];
+        match self.port.read(&mut buf) {
+            Ok(0) => Ok(None),
+            Ok(n) => Ok(Some(buf[..n].to_vec())),
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => Ok(None),
+            Err(e) => Err(unreachable(format!(
+                "serial read from {} failed: {e}",
+                self.path
+            ))),
+        }
+    }
+}
+
+impl<T: Transport + ?Sized> Transport for Box<T> {
+    fn link(&self) -> Link {
+        (**self).link()
+    }
+
+    fn send(&mut self, bytes: &[u8]) -> Result<()> {
+        (**self).send(bytes)
+    }
+
+    fn recv(&mut self, timeout: Duration) -> Result<Option<Vec<u8>>> {
+        (**self).recv(timeout)
+    }
+}
+
+/// Open the transport a profile's `[connection]` table asks for:
+/// `transport = "udp"` with `host`, or `transport = "serial"` with
+/// `serial_port` (and optional `baud`).
+pub fn open_from_profile(profile: &libreburn_core::MachineProfile) -> Result<Box<dyn Transport>> {
+    let c = &profile.connection;
+    let s = |k: &str| c.get(k).and_then(|v| v.as_str());
+    let bad = |why: String, hint: &str| {
+        Error::new(
+            ErrorCode::ProfileInvalid,
+            "Invalid Ruida connection settings",
+            why,
+            hint,
+        )
+    };
+    match s("transport").unwrap_or("udp") {
+        "udp" => {
+            let host = s("host").ok_or_else(|| {
+                bad(
+                    "connection.host is missing".into(),
+                    "set host to the controller's IP address",
+                )
+            })?;
+            Ok(Box::new(UdpTransport::connect(host)?))
+        }
+        "serial" => {
+            let path = s("serial_port").ok_or_else(|| {
+                bad(
+                    "connection.serial_port is missing".into(),
+                    "set serial_port, for example \"/dev/ttyUSB0\"",
+                )
+            })?;
+            let baud = c
+                .get("baud")
+                .and_then(|v| v.as_integer())
+                .map_or(Ok(SERIAL_BAUD), |b| {
+                    u32::try_from(b).map_err(|_| {
+                        bad(
+                            format!("connection.baud is {b}"),
+                            "use a baud rate such as 115200",
+                        )
+                    })
+                })?;
+            Ok(Box::new(SerialTransport::open(path, baud)?))
+        }
+        other => Err(bad(
+            format!("connection.transport is \"{other}\""),
+            "use \"udp\" or \"serial\"",
+        )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn profile(conn: &str) -> libreburn_core::MachineProfile {
+        let text = include_str!("../../../profiles/omtech-k40-ruida.toml");
+        let head = &text[..text.find("[connection]").unwrap()];
+        libreburn_core::MachineProfile::from_toml(&format!("{head}[connection]\n{conn}\n")).unwrap()
+    }
+
+    /// Drive the simulator through a real pseudo-terminal, so the serial
+    /// read/write code path is exercised end to end.
+    #[cfg(unix)]
+    #[test]
+    fn serial_pty_against_the_simulator() {
+        use crate::sim::RuidaSim;
+        use serialport::SerialPort;
+        use std::io::{Read, Write};
+        use std::sync::{Arc, Mutex};
+
+        let (mut master, slave) = serialport::TTYPort::pair().unwrap();
+        let sim = Arc::new(Mutex::new(RuidaSim::new(
+            protocol::MAGIC_644X,
+            Link::Serial,
+            (300.0, 200.0),
+        )));
+        let shared = sim.clone();
+        master.set_timeout(Duration::from_millis(200)).unwrap();
+        let server = std::thread::spawn(move || {
+            let mut buf = [0u8; 4096];
+            let mut idle = 0;
+            while idle < 10 {
+                match master.read(&mut buf) {
+                    Ok(n) if n > 0 => {
+                        idle = 0;
+                        let replies = shared.lock().unwrap().handle(&buf[..n]);
+                        for r in replies {
+                            master.write_all(&r).unwrap();
+                        }
+                    }
+                    _ => idle += 1,
+                }
+            }
+        });
+        let mut session = Session::new(
+            SerialTransport::from_port(Box::new(slave), "pty"),
+            protocol::MAGIC_644X,
+        );
+        session.timeout = Duration::from_millis(500);
+        let id = session.read_mem(crate::codec::mem::CARD_ID).unwrap();
+        assert_eq!(id, crate::sim::SIM_CARD_ID);
+        drop(session);
+        server.join().unwrap();
+        assert!(sim.lock().unwrap().errors.is_empty());
+    }
+
+    #[test]
+    fn profile_selects_the_transport() {
+        let t = open_from_profile(&profile("transport = \"udp\"\nhost = \"127.0.0.1\"")).unwrap();
+        assert_eq!(t.link(), Link::Udp);
+        let err = open_from_profile(&profile("transport = \"carrier-pigeon\"")).unwrap_err();
+        assert_eq!(err.code, ErrorCode::ProfileInvalid);
+        let err = open_from_profile(&profile("transport = \"serial\"")).unwrap_err();
+        assert_eq!(err.code, ErrorCode::ProfileInvalid);
+        let err = open_from_profile(&profile(
+            "transport = \"serial\"\nserial_port = \"/dev/does-not-exist-libreburn\"",
+        ))
+        .unwrap_err();
+        assert_eq!(err.code, ErrorCode::DeviceUnreachable);
     }
 }

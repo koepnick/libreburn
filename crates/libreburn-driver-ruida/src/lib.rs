@@ -28,7 +28,7 @@ use libreburn_core::{
     MachineState, RawExchange, Result,
 };
 
-pub use transport::{Link, Session, Transport, UdpTransport};
+pub use transport::{Link, SerialTransport, Session, Transport, UdpTransport, open_from_profile};
 
 use crate::codec::mem;
 use crate::rd::Geometry;
