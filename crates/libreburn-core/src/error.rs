@@ -19,6 +19,12 @@ pub enum ErrorCode {
     ProtocolViolation,
     /// The operation is not supported by this driver.
     Unsupported,
+    /// A file could not be read or converted.
+    ImportFailed,
+    /// The file type is not one libreburn imports.
+    ImportUnsupported,
+    /// The project could not be turned into a job.
+    PlanFailed,
 }
 
 impl ErrorCode {
@@ -30,6 +36,9 @@ impl ErrorCode {
             Self::DeviceUnreachable => "LB-DEVICE-001",
             Self::ProtocolViolation => "LB-PROTO-001",
             Self::Unsupported => "LB-DRIVER-001",
+            Self::ImportFailed => "LB-IMPORT-001",
+            Self::ImportUnsupported => "LB-IMPORT-002",
+            Self::PlanFailed => "LB-PLAN-001",
         }
     }
 }
